@@ -1,0 +1,58 @@
+[package]
+name = "webmcp-rs"
+version = "0.1.0"
+authors = ["Hauke Jung <hauke.jung@outlook.de>"]
+edition = "2024"
+# let-chains in `wasm::model_context`.
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/hauju/webmcp-rs"
+homepage = "https://github.com/hauju/webmcp-rs"
+documentation = "https://docs.rs/webmcp-rs"
+description = "Browser-side WebMCP (W3C Web Model Context Protocol) tool registration for Rust and WebAssembly"
+readme = "README.md"
+keywords = ["webmcp", "mcp", "wasm", "browser", "ai-agents"]
+categories = ["wasm", "web-programming", "api-bindings"]
+exclude = [".github/", ".gitignore", "justfile"]
+
+# The `webmcp` name on crates.io is held by an unrelated placeholder, so the
+# package is `webmcp-rs` while the library keeps the natural name: consumers
+# write `use webmcp::Tool`.
+[lib]
+name = "webmcp"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+# Optional: derive `inputSchema` from the handler's argument type instead of
+# hand-writing JSON Schema next to a serde struct that can drift from it.
+schemars = { version = "1", optional = true }
+# Optional: `use_tool`, which ties a registration to a component's lifetime.
+dioxus = { version = "0.7.9", optional = true, default-features = false, features = [
+    "lib",
+] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6"
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "Navigator",
+    "AbortController",
+    "AbortSignal",
+    "console",
+] }
+
+[features]
+default = ["schema"]
+schema = ["dep:schemars"]
+dioxus = ["dep:dioxus"]
+
+[package.metadata.docs.rs]
+all-features = true
+# Render the wasm-only `webmcp::wasm` module too; the host build hides it.
+targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
