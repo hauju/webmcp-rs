@@ -13,3 +13,9 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Demo site (site/)
+site/assets/tailwind.css
+site/node_modules
+site/dist
+site/.dioxus

@@ -1,0 +1,11 @@
+[application]
+
+[web.app]
+
+title = "webmcp-rs — browser-side WebMCP for Rust"
+
+# The site is served from https://hauju.github.io/webmcp-rs/. This is the only
+# place the base path is written down: the polyfill <script> in index.html uses
+# a document-relative URL, and every other asset goes through `asset!()`, which
+# the CLI rewrites with this prefix.
+base_path = "webmcp-rs"

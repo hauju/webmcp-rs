@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+    themes: false;
+}
+
+/* One theme, dark, locked: an instrument panel for watching an agent work.
+   Mint is the "signal" colour (a live tool), amber the Rust accent. */
+@plugin "daisyui/theme" {
+    name: "webmcp";
+    default: true;
+    prefersdark: true;
+    color-scheme: dark;
+
+    --color-base-100: oklch(16% 0.008 200);
+    --color-base-200: oklch(21% 0.011 200);
+    --color-base-300: oklch(27% 0.014 200);
+    --color-base-content: oklch(92% 0.008 190);
+
+    --color-primary: oklch(85% 0.145 168);
+    --color-primary-content: oklch(21% 0.05 168);
+    --color-secondary: oklch(76% 0.135 62);
+    --color-secondary-content: oklch(20% 0.05 62);
+    --color-accent: oklch(76% 0.115 262);
+    --color-accent-content: oklch(20% 0.05 262);
+    --color-neutral: oklch(27% 0.012 200);
+    --color-neutral-content: oklch(90% 0.008 190);
+
+    --color-info: oklch(76% 0.115 262);
+    --color-info-content: oklch(20% 0.05 262);
+    --color-success: oklch(85% 0.145 168);
+    --color-success-content: oklch(21% 0.05 168);
+    --color-warning: oklch(76% 0.135 62);
+    --color-warning-content: oklch(20% 0.05 62);
+    --color-error: oklch(70% 0.17 22);
+    --color-error-content: oklch(18% 0.05 22);
+
+    --radius-selector: 0.25rem;
+    --radius-field: 0.25rem;
+    --radius-box: 0.5rem;
+    --border: 1px;
+}
+
+@theme {
+    --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@source "./src/**/*.rs";
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-display);
+    /* A faint engineering grid, so the ground is never flat black. */
+    background-image:
+        linear-gradient(
+            to right,
+            color-mix(in oklab, var(--color-base-content) 4%, transparent) 1px,
+            transparent 1px
+        ),
+        linear-gradient(
+            to bottom,
+            color-mix(in oklab, var(--color-base-content) 4%, transparent) 1px,
+            transparent 1px
+        );
+    background-size: 64px 64px;
+}
+
+/* Section index labels: `01 / DEMO` in the margin. */
+.rule-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+}
+
+/* The wire between the agent console and the app it is driving. */
+@keyframes wire-pulse {
+    0%,
+    100% {
+        opacity: 0.25;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+.wire-live {
+    animation: wire-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.rise {
+    animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}

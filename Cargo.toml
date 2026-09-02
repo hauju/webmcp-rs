@@ -13,7 +13,11 @@ description = "Browser-side WebMCP (W3C Web Model Context Protocol) tool registr
 readme = "README.md"
 keywords = ["webmcp", "mcp", "wasm", "browser", "ai-agents"]
 categories = ["wasm", "web-programming", "api-bindings"]
-exclude = [".github/", ".gitignore", "justfile"]
+exclude = [".github/", ".gitignore", "justfile", "site/"]
+
+# The demo site lives in the workspace but is never published.
+[workspace]
+members = ["site"]
 
 # The `webmcp` name on crates.io is held by an unrelated placeholder, so the
 # package is `webmcp-rs` while the library keeps the natural name: consumers

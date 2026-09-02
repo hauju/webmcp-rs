@@ -28,3 +28,13 @@ check: fmt clippy test
 [group("release")]
 publish-dry-run:
     cargo publish --dry-run
+
+# Serve the demo site at http://localhost:8080/webmcp-rs/
+[group("site")]
+site-serve:
+    cd site && bun install --frozen-lockfile && ./node_modules/.bin/tailwindcss -i tailwind.css -o assets/tailwind.css --minify && dx serve
+
+# Build exactly what CI publishes to GitHub Pages
+[group("site")]
+site-build:
+    cd site && bun install --frozen-lockfile && ./node_modules/.bin/tailwindcss -i tailwind.css -o assets/tailwind.css --minify && dx bundle --web --release

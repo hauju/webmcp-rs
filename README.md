@@ -7,6 +7,9 @@
 Browser-side [WebMCP](https://github.com/webmachinelearning/webmcp) for Rust and
 WebAssembly: let the page hand tools to whatever agent is driving the browser.
 
+**Live demo: <https://hauju.github.io/webmcp-rs/>** — a todo list driven by five
+registered tools, with a console for calling them by hand.
+
 WebMCP is the W3C proposal (Google + Microsoft, Web Machine Learning CG) that
 lets a web page register tools on `document.modelContext`. An in-browser agent
 discovers them and calls them instead of scraping the DOM. The tools run inside
@@ -131,6 +134,27 @@ rather than throwing.
 
 - `schema` (default) — `register_typed` / `Tool::args::<T>()` via `schemars`.
 - `dioxus` — `use_tool`, tying a registration to a component's lifetime.
+
+## Site
+
+`site/` is the Dioxus web app behind the live demo: one client-rendered page,
+excluded from the published crate, deployed to GitHub Pages by
+`.github/workflows/site.yml` on every push to `main`.
+
+```sh
+just site-serve   # http://localhost:8080/webmcp-rs/
+just site-build   # exactly what CI publishes
+```
+
+`site/src/demo.rs` is the demo in full — five tools registered with `use_tool`,
+and the read-snapshot / coroutine-channel pattern that keeps handlers off the
+Dioxus runtime. The page shows that file verbatim.
+
+The demo works in any browser because the page loads Google's
+[WebMCP polyfill](https://github.com/GoogleChromeLabs/webmcp-tools) (Apache-2.0)
+before the wasm starts; it is vendored at `site/assets/webmcp-polyfill.js` with
+its copyright header intact, and stands down when the browser has the native
+API.
 
 ## License
 

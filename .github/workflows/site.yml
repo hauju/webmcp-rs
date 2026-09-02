@@ -1,0 +1,66 @@
+name: Site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# One deploy at a time, and never cancel one half-way through.
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: dioxus-cli@0.7.10
+      - uses: oven-sh/setup-bun@v2
+
+      # The lockfile-pinned binary, not `bunx`, which can silently resolve a
+      # newer cached tailwind and change the output.
+      - name: Build Tailwind CSS
+        working-directory: site
+        run: |
+          bun install --frozen-lockfile
+          ./node_modules/.bin/tailwindcss -i tailwind.css -o assets/tailwind.css --minify
+
+      # `base_path` in site/Dioxus.toml puts every asset under /webmcp-rs/.
+      - name: Bundle the site
+        working-directory: site
+        run: dx bundle --web --release
+
+      - name: Serve the bundle as-is
+        run: touch target/dx/site/release/web/public/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/dx/site/release/web/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

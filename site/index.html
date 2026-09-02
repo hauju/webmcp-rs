@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="webmcp">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Filled in from `[web.app] title` in Dioxus.toml. -->
+    <title></title>
+    <meta
+      name="description"
+      content="webmcp-rs registers WebMCP tools on document.modelContext from Rust and WebAssembly, with schemas derived from your argument types and registrations that unregister on drop."
+    />
+
+    <link rel="stylesheet" href="assets/tailwind.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    />
+
+    <!-- Record whether the browser brought its own model context BEFORE the
+         polyfill installs one, so the page can tell the visitor which it got. -->
+    <script>
+      window.__webmcp_native = !!document.modelContext;
+    </script>
+    <!-- Must run before the wasm module, which registers tools on first render.
+         Document-relative on purpose: it resolves under the base path without
+         writing the base path down a second time. -->
+    <script src="assets/webmcp-polyfill.js"></script>
+  </head>
+  <body>
+    <div id="main"></div>
+  </body>
+</html>

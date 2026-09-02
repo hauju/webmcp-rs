@@ -10,6 +10,7 @@
 use std::rc::Rc;
 
 use js_sys::{Array, Function, Object, Promise, Reflect};
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 use web_sys::AbortController;
@@ -63,7 +64,12 @@ impl Drop for Registration {
 fn prepare(tool: &Tool, handler: ErasedHandler) -> Result<(Object, Object, Registration)> {
     validate_schema(tool)?;
 
-    let schema = serde_wasm_bindgen::to_value(&tool.input_schema)
+    // `json_compatible()`, not `to_value()`: the default serializer turns a
+    // `serde_json::Value::Object` into a JS `Map`, and a `Map` stringifies to
+    // `{}` — so every agent would plan against an empty schema.
+    let schema = tool
+        .input_schema
+        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| Error::Schema(e.to_string()))?;
 
     let execute = Closure::<dyn FnMut(JsValue) -> Promise>::new(move |args: JsValue| {
