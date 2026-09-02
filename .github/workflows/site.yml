@@ -43,7 +43,6 @@ jobs:
           bun install --frozen-lockfile
           ./node_modules/.bin/tailwindcss -i tailwind.css -o assets/tailwind.css --minify
 
-      # `base_path` in site/Dioxus.toml puts every asset under /webmcp-rs/.
       - name: Bundle the site
         working-directory: site
         run: dx bundle --web --release

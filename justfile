@@ -29,7 +29,7 @@ check: fmt clippy test
 publish-dry-run:
     cargo publish --dry-run
 
-# Serve the demo site at http://localhost:8080/webmcp-rs/
+# Serve the demo site at http://localhost:8080/
 [group("site")]
 site-serve:
     cd site && bun install --frozen-lockfile && ./node_modules/.bin/tailwindcss -i tailwind.css -o assets/tailwind.css --minify && dx serve

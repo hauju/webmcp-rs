@@ -7,7 +7,7 @@
 Browser-side [WebMCP](https://github.com/webmachinelearning/webmcp) for Rust and
 WebAssembly: let the page hand tools to whatever agent is driving the browser.
 
-**Live demo: <https://hauju.github.io/webmcp-rs/>** — a todo list driven by five
+**Live demo: <https://webmcp.oxidt.com>** — a todo list driven by five
 registered tools, with a console for calling them by hand.
 
 WebMCP is the W3C proposal (Google + Microsoft, Web Machine Learning CG) that
@@ -142,7 +142,7 @@ excluded from the published crate, deployed to GitHub Pages by
 `.github/workflows/site.yml` on every push to `main`.
 
 ```sh
-just site-serve   # http://localhost:8080/webmcp-rs/
+just site-serve   # http://localhost:8080/
 just site-build   # exactly what CI publishes
 ```
 
