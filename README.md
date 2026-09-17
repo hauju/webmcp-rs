@@ -77,6 +77,31 @@ Enable it with `features = ["dioxus"]`. Handlers run on a browser callback,
 outside the framework's runtime: reach for `Rc<RefCell<_>>` or a coroutine
 channel for state, not a `Signal`.
 
+## Leptos
+
+```rust
+use leptos::prelude::*;
+use webmcp::{Tool, ToolResult};
+
+#[component]
+fn ProjectPage() -> impl IntoView {
+    webmcp::leptos::use_tool(|| {
+        Tool::new("refresh_feedback")
+            .description("Reload the feedback list")
+            .register(|_| async { Ok::<_, std::convert::Infallible>(ToolResult::text("done")) })
+    });
+    view! { <div/> }
+}
+```
+
+Enable it with `features = ["leptos"]`. The handle is parked in the component's
+reactive owner, so cleaning that owner up unregisters the tool. Registering with
+no owner in scope leaks the registration until the page unloads, so `use_tool`
+warns when it finds none.
+
+Both features export `use_tool`; with exactly one enabled it is also available
+unqualified as `webmcp::use_tool`.
+
 ## Handlers
 
 - `register(|args: serde_json::Value| ...)` — hand-written `inputSchema`.
@@ -141,6 +166,7 @@ rather than throwing.
 
 - `schema` (default) — `register_typed` / `Tool::args::<T>()` via `schemars`.
 - `dioxus` — `use_tool`, tying a registration to a component's lifetime.
+- `leptos` — the same, tied to the component's reactive owner.
 
 ## Site
 
@@ -171,8 +197,8 @@ API.
 crate's WASM tests with and without default features, plus the demo tests, in
 headless Chrome using `wasm-pack`. The browser suite installs a controlled model
 context to exercise registration, execution, errors, and cleanup without an
-experimental browser flag. It also mounts Dioxus components to check tool
-lifetimes and reads immediately following mutations. This validates the Rust/JS
+experimental browser flag. It also mounts Dioxus components and cleans up Leptos
+owners to check tool lifetimes, and reads immediately following mutations. This validates the Rust/JS
 integration; it does not certify a particular native WebMCP implementation.
 
 ## License

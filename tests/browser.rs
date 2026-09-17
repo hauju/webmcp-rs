@@ -101,6 +101,8 @@ async fn browser_registration_and_execution() {
     typed_registration().await;
     #[cfg(feature = "dioxus")]
     component_lifetime().await;
+    #[cfg(feature = "leptos")]
+    owner_lifetime().await;
     assert!(browser::names().await.is_empty());
 }
 
@@ -163,5 +165,21 @@ async fn component_lifetime() {
     dom.rebuild_in_place();
     assert_eq!(browser::names().await, ["mounted"]);
     drop(dom);
+    assert!(browser::names().await.is_empty());
+}
+
+#[cfg(feature = "leptos")]
+async fn owner_lifetime() {
+    use leptos::prelude::Owner;
+
+    let owner = Owner::new();
+    owner.with(|| {
+        webmcp::leptos::use_tool(|| {
+            tool("owned").register(|_| async { Ok::<_, Infallible>(ToolResult::text("owned")) })
+        });
+    });
+    assert_eq!(browser::names().await, ["owned"]);
+    // Cleaning up the owner is what unmounting a component does.
+    drop(owner);
     assert!(browser::names().await.is_empty());
 }

@@ -36,6 +36,10 @@ schemars = { version = "1", optional = true }
 dioxus = { version = "0.7.9", optional = true, default-features = false, features = [
     "lib",
 ] }
+# Optional: the same lifetime tie for Leptos, via the component's reactive
+# owner. Leptos declares no `default` feature, so this pulls in nothing beyond
+# the reactive core the host app already builds.
+leptos = { version = "0.8", optional = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 js-sys = "0.3"
@@ -55,6 +59,7 @@ web-sys = { version = "0.3", features = [
 default = ["schema"]
 schema = ["dep:schemars"]
 dioxus = ["dep:dioxus"]
+leptos = ["dep:leptos"]
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3"

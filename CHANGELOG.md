@@ -8,6 +8,11 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - `register_typed_async`, combining derived schemas with awaited registration.
+- `leptos` feature with `leptos::use_tool`, tying a registration to the calling
+  component's reactive owner. It warns when no owner is in scope, because an
+  arena value with no owner to reclaim it outlives the UI it came from. The
+  `dioxus` and `leptos` modules are now public so both can be enabled at once;
+  with exactly one enabled, `use_tool` is still re-exported at the crate root.
 - Browser integration tests for registration, argument decoding, tool lifetimes,
   demo mutation acknowledgements, and event listener cleanup, run in CI.
 

@@ -70,8 +70,12 @@ mod native;
 #[cfg(not(target_family = "wasm"))]
 use native as imp;
 
+// Public so both can coexist under `--all-features`; the root `use_tool` alias
+// below covers the ordinary case of a crate using exactly one framework.
 #[cfg(feature = "dioxus")]
-mod dioxus;
+pub mod dioxus;
+#[cfg(feature = "leptos")]
+pub mod leptos;
 
 pub use error::{Error, Result};
 pub use result::{Content, ToolResult};
@@ -82,6 +86,8 @@ pub use schema::schema_for;
 
 #[cfg(feature = "dioxus")]
 pub use dioxus::use_tool;
+#[cfg(all(feature = "leptos", not(feature = "dioxus")))]
+pub use leptos::use_tool;
 
 /// Whether the current page exposes a model context to register tools on.
 ///
@@ -97,9 +103,12 @@ pub fn is_supported() -> bool {
 /// The crate deliberately has no logging dependency: a UI crate should not
 /// force `tracing` or `log` on its dependents for three diagnostics.
 ///
-/// Only wasm and the `dioxus` feature call it; the plain host build would
+/// Only wasm and the framework features call it; the plain host build would
 /// otherwise flag it as dead.
-#[cfg_attr(not(any(target_family = "wasm", feature = "dioxus")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_family = "wasm", feature = "dioxus", feature = "leptos")),
+    allow(dead_code)
+)]
 pub(crate) fn warn(message: &str) {
     #[cfg(target_family = "wasm")]
     web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(message));
