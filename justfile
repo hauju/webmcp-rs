@@ -24,6 +24,13 @@ test:
 check: fmt clippy test
     cargo machete
 
+# WASM execution tests in headless Chrome (requires wasm-pack)
+[group("dev")]
+test-browser:
+    wasm-pack test --headless --chrome --all-features
+    wasm-pack test --headless --chrome --no-default-features
+    wasm-pack test --headless --chrome site
+
 # What `cargo publish` would upload
 [group("release")]
 publish-dry-run:

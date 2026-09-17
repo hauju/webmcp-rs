@@ -86,6 +86,13 @@ channel for state, not a `Signal`.
 - `register_async(...)` — awaits the browser's verdict, so a rejected
   descriptor (a duplicate name, say) is a real `Err` instead of a console
   warning.
+- `register_typed_async(...)` — combines derived schemas and typed arguments
+  with the awaited registration verdict.
+
+Every tool needs a non-blank `.description(...)`. Missing descriptions and blank
+names return `Error::Descriptor` before reaching the browser, including on native
+targets. Invalid JS arguments return an error result without invoking the handler;
+only an omitted (`undefined`) argument defaults to an empty object.
 
 A handler returns `Result<ToolResult, E>` for any `E: Display`; an `Err` reaches
 the agent as `isError: true` with the message, which is the protocol's soft
@@ -148,13 +155,25 @@ just site-build   # exactly what CI publishes
 
 `site/src/demo.rs` is the demo in full — five tools registered with `use_tool`,
 and the read-snapshot / coroutine-channel pattern that keeps handlers off the
-Dioxus runtime. The page shows that file verbatim.
+Dioxus runtime. Mutation calls await a reply after the state and read snapshot
+are updated; `add_todo` returns the created item, including its ID. The page
+shows that file verbatim.
 
 The demo works in any browser because the page loads Google's
 [WebMCP polyfill](https://github.com/GoogleChromeLabs/webmcp-tools) (Apache-2.0)
 before the wasm starts; it is vendored at `site/assets/webmcp-polyfill.js` with
 its copyright header intact, and stands down when the browser has the native
 API.
+
+## Testing
+
+`just test` runs host tests and checks the docs. `just test-browser` runs the
+crate's WASM tests with and without default features, plus the demo tests, in
+headless Chrome using `wasm-pack`. The browser suite installs a controlled model
+context to exercise registration, execution, errors, and cleanup without an
+experimental browser flag. It also mounts Dioxus components to check tool
+lifetimes and reads immediately following mutations. This validates the Rust/JS
+integration; it does not certify a particular native WebMCP implementation.
 
 ## License
 

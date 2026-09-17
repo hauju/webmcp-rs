@@ -15,8 +15,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 use web_sys::AbortController;
 
+use crate::ToolResult;
 use crate::error::{Error, Result};
-use crate::tool::{ErasedHandler, Tool, ToolHandle, validate_schema};
+use crate::tool::{ErasedHandler, Tool, ToolHandle, validate_descriptor};
 
 /// Resolve the page's model context.
 ///
@@ -62,7 +63,7 @@ impl Drop for Registration {
 
 /// Build the descriptor, the abort controller and the `execute` closure.
 fn prepare(tool: &Tool, handler: ErasedHandler) -> Result<(Object, Object, Registration)> {
-    validate_schema(tool)?;
+    validate_descriptor(tool)?;
 
     // `json_compatible()`, not `to_value()`: the default serializer turns a
     // `serde_json::Value::Object` into a JS `Map`, and a `Map` stringifies to
@@ -77,13 +78,18 @@ fn prepare(tool: &Tool, handler: ErasedHandler) -> Result<(Object, Object, Regis
         future_to_promise(async move {
             // A tool called with no arguments arrives as `undefined`; treat that
             // as an empty object so handlers taking all-optional parameters work.
-            let parsed = if args.is_undefined() || args.is_null() {
-                serde_json::Value::Object(Default::default())
+            let parsed = if args.is_undefined() {
+                Ok(serde_json::Value::Object(Default::default()))
             } else {
                 serde_wasm_bindgen::from_value(args)
-                    .unwrap_or(serde_json::Value::Object(Default::default()))
             };
-            let result = handler(parsed).await;
+            let result = match parsed {
+                Ok(serde_json::Value::Object(args)) => {
+                    handler(serde_json::Value::Object(args)).await
+                }
+                Ok(_) => ToolResult::error("invalid arguments: expected an object"),
+                Err(e) => ToolResult::error(format!("invalid arguments: {e}")),
+            };
             serde_wasm_bindgen::to_value(&result)
                 .map_err(|e| JsValue::from_str(&format!("failed to encode tool result: {e}")))
         })

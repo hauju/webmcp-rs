@@ -7,12 +7,14 @@
 //! **Tool handlers run outside the Dioxus runtime.** The browser invokes them
 //! from a plain JS callback, with no reactive scope on the stack, so touching a
 //! `Signal` inside a handler is a panic waiting to happen. The way around it is
-//! two one-way channels:
+//! a snapshot and a command channel:
 //!
-//! * **reads** — an `Rc<RefCell<Vec<Todo>>>` snapshot the component refreshes
-//!   after every render. Handlers only ever `borrow()` it.
-//! * **writes** — an `UnboundedSender<Command>`. The `use_coroutine` receiver
-//!   runs *inside* the runtime and is the only thing that touches the `Signal`.
+//! * **reads** — an `Rc<RefCell<Vec<Todo>>>` snapshot initialized on mount and
+//!   refreshed by the coroutine after every mutation. Handlers only ever `borrow()` it.
+//! * **writes** — an `UnboundedSender<Request>`. The `use_coroutine` receiver
+//!   runs *inside* the runtime and applies mutations to the `Signal`. Tool calls
+//!   await a reply sent after the snapshot is current, so a following read sees
+//!   the completed mutation.
 //!
 //! Everything else is ordinary Dioxus: the same list renders for the human, so
 //! a tool call and a click land in exactly the same place.
@@ -21,6 +23,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use dioxus::prelude::*;
+use futures_channel::oneshot;
 use futures_util::StreamExt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -41,6 +44,21 @@ enum Command {
     SetDone { id: u32, done: bool },
     Delete(u32),
     ClearCompleted,
+}
+
+/// Human actions need no reply; tool calls wait for the applied result.
+struct Request {
+    command: Command,
+    reply: Option<oneshot::Sender<Result<ToolResult, String>>>,
+}
+
+impl From<Command> for Request {
+    fn from(command: Command) -> Self {
+        Self {
+            command,
+            reply: None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -88,38 +106,29 @@ pub fn TodoDemo() -> Element {
             },
         ]
     });
-    let mut next_id = use_signal(|| 4u32);
+    // Initialize before tools are registered, then update in the same turn as
+    // each mutation. Reads never depend on a later render/effect being scheduled.
+    let snapshot: Rc<RefCell<Vec<Todo>>> = use_hook(|| Rc::new(RefCell::new(todos.peek().clone())));
 
-    // The read side. A handler cannot read `todos`, so the component keeps this
-    // plain snapshot in step with it after every render.
-    let snapshot: Rc<RefCell<Vec<Todo>>> = use_hook(|| Rc::new(RefCell::new(Vec::new())));
-    use_effect({
+    let commands = use_coroutine({
         let snapshot = snapshot.clone();
-        move || *snapshot.borrow_mut() = todos()
-    });
-
-    // The write side. This closure is the only code that touches the `Signal`,
-    // and it runs inside the runtime because the coroutine owns it.
-    let commands = use_coroutine(move |mut rx: UnboundedReceiver<Command>| async move {
-        while let Some(command) = rx.next().await {
-            match command {
-                Command::Add(text) => {
-                    let id = next_id();
-                    next_id.set(id + 1);
-                    todos.write().push(Todo {
-                        id,
-                        text,
-                        done: false,
-                    });
-                }
-                Command::SetDone { id, done } => {
-                    let mut list = todos.write();
-                    if let Some(todo) = list.iter_mut().find(|todo| todo.id == id) {
-                        todo.done = done;
+        move |mut rx: UnboundedReceiver<Request>| {
+            let snapshot = snapshot.clone();
+            async move {
+                let mut next_id = 4u32;
+                while let Some(Request { command, reply }) = rx.next().await {
+                    let result = {
+                        let mut list = todos.write();
+                        let result = apply(command, &mut list, &mut next_id);
+                        *snapshot.borrow_mut() = list.clone();
+                        result
+                    };
+                    // Release the signal borrow and publish the snapshot before
+                    // resolving the tool call, even if another call is already queued.
+                    if let Some(reply) = reply {
+                        let _ = reply.send(result);
                     }
                 }
-                Command::Delete(id) => todos.write().retain(|todo| todo.id != id),
-                Command::ClearCompleted => todos.write().retain(|todo| !todo.done),
             }
         }
     });
@@ -137,25 +146,17 @@ pub fn TodoDemo() -> Element {
             Tool::new("add_todo")
                 .description(
                     "Add one item to the todo list the user is looking at. \
-                     Returns the text that was added.",
+                     Returns the added item with its id, text and completion state.",
                 )
                 .register_typed(move |args: AddTodo| {
                     let tx = tx.clone();
-                    async move {
-                        let text = args.text.trim().to_string();
-                        if text.is_empty() {
-                            return Err("`text` must not be empty".to_string());
-                        }
-                        send(&tx, Command::Add(text.clone()))?;
-                        Ok(ToolResult::text(format!("Added \"{text}\".")))
-                    }
+                    async move { send(&tx, Command::Add(args.text)).await }
                 })
         }
     });
 
     use_tool({
         let tx = tx.clone();
-        let snapshot = snapshot.clone();
         move || {
             Tool::new("complete_todo")
                 .description(
@@ -164,17 +165,15 @@ pub fn TodoDemo() -> Element {
                 )
                 .register_typed(move |args: TodoId| {
                     let tx = tx.clone();
-                    let snapshot = snapshot.clone();
                     async move {
-                        let text = find(&snapshot, args.id)?;
                         send(
                             &tx,
                             Command::SetDone {
                                 id: args.id,
                                 done: true,
                             },
-                        )?;
-                        Ok::<_, String>(ToolResult::text(format!("Completed \"{text}\".")))
+                        )
+                        .await
                     }
                 })
         }
@@ -182,18 +181,12 @@ pub fn TodoDemo() -> Element {
 
     use_tool({
         let tx = tx.clone();
-        let snapshot = snapshot.clone();
         move || {
             Tool::new("delete_todo")
                 .description("Remove one todo item from the list for good.")
                 .register_typed(move |args: TodoId| {
                     let tx = tx.clone();
-                    let snapshot = snapshot.clone();
-                    async move {
-                        let text = find(&snapshot, args.id)?;
-                        send(&tx, Command::Delete(args.id))?;
-                        Ok::<_, String>(ToolResult::text(format!("Deleted \"{text}\".")))
-                    }
+                    async move { send(&tx, Command::Delete(args.id)).await }
                 })
         }
     });
@@ -215,22 +208,12 @@ pub fn TodoDemo() -> Element {
 
     use_tool({
         let tx = tx.clone();
-        let snapshot = snapshot.clone();
         move || {
             Tool::new("clear_completed")
                 .description("Remove every item that is already done, leaving the rest alone.")
                 .register_typed(move |_: NoArgs| {
                     let tx = tx.clone();
-                    let snapshot = snapshot.clone();
-                    async move {
-                        let cleared = snapshot.borrow().iter().filter(|todo| todo.done).count();
-                        send(&tx, Command::ClearCompleted)?;
-                        Ok::<_, String>(ToolResult::text(match cleared {
-                            0 => "Nothing was completed, so nothing was cleared.".to_string(),
-                            1 => "Cleared 1 completed item.".to_string(),
-                            n => format!("Cleared {n} completed items."),
-                        }))
-                    }
+                    async move { send(&tx, Command::ClearCompleted).await }
                 })
         }
     });
@@ -253,7 +236,7 @@ pub fn TodoDemo() -> Element {
                         event.prevent_default();
                         let text = draft().trim().to_string();
                         if !text.is_empty() {
-                            let _ = tx.unbounded_send(Command::Add(text));
+                            let _ = tx.unbounded_send(Command::Add(text).into());
                             draft.set(String::new());
                         }
                     }
@@ -284,7 +267,7 @@ pub fn TodoDemo() -> Element {
                                 let tx = tx.clone();
                                 let (id, done) = (todo.id, todo.done);
                                 move |_| {
-                                    let _ = tx.unbounded_send(Command::SetDone { id, done: !done });
+                                    let _ = tx.unbounded_send(Command::SetDone { id, done: !done }.into());
                                 }
                             },
                         }
@@ -300,7 +283,7 @@ pub fn TodoDemo() -> Element {
                                 let tx = tx.clone();
                                 let id = todo.id;
                                 move |_| {
-                                    let _ = tx.unbounded_send(Command::Delete(id));
+                                    let _ = tx.unbounded_send(Command::Delete(id).into());
                                 }
                             },
                             "✕"
@@ -321,7 +304,7 @@ pub fn TodoDemo() -> Element {
                     onclick: {
                         let tx = tx.clone();
                         move |_| {
-                            let _ = tx.unbounded_send(Command::ClearCompleted);
+                            let _ = tx.unbounded_send(Command::ClearCompleted.into());
                         }
                     },
                     "clear completed"
@@ -331,20 +314,68 @@ pub fn TodoDemo() -> Element {
     }
 }
 
-/// Push a mutation at the coroutine. The only way this fails is the demo having
-/// been unmounted, which the agent should hear about rather than see swallowed.
-fn send(tx: &UnboundedSender<Command>, command: Command) -> Result<(), String> {
-    tx.unbounded_send(command)
-        .map_err(|_| "the todo demo is no longer on screen".to_string())
+/// Await the applied mutation, not just its delivery to the command queue.
+async fn send(tx: &UnboundedSender<Request>, command: Command) -> Result<ToolResult, String> {
+    let (reply, response) = oneshot::channel();
+    tx.unbounded_send(Request {
+        command,
+        reply: Some(reply),
+    })
+    .map_err(|_| "the todo demo is no longer on screen".to_string())?;
+    response
+        .await
+        .map_err(|_| "the todo demo was unmounted before the command completed".to_string())?
 }
 
-/// Resolve an id against the read snapshot, so a bad id comes back to the agent
-/// as a message it can act on instead of a silent no-op.
-fn find(snapshot: &Rc<RefCell<Vec<Todo>>>, id: u32) -> Result<String, String> {
-    snapshot
-        .borrow()
-        .iter()
-        .find(|todo| todo.id == id)
-        .map(|todo| todo.text.clone())
-        .ok_or_else(|| format!("no todo has id {id}; call list_todos for the current ids"))
+/// Validate against the current state at the point of mutation. Two queued
+/// deletes cannot both succeed, and clear counts reflect what was removed.
+fn apply(command: Command, list: &mut Vec<Todo>, next_id: &mut u32) -> Result<ToolResult, String> {
+    let missing = |id| format!("no todo has id {id}; call list_todos for the current ids");
+    match command {
+        Command::Add(text) => {
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                return Err("`text` must not be empty".to_string());
+            }
+            let id = *next_id;
+            *next_id = id.checked_add(1).ok_or("todo ids exhausted")?;
+            let todo = Todo {
+                id,
+                text,
+                done: false,
+            };
+            let result = ToolResult::json(&todo);
+            list.push(todo);
+            Ok(result)
+        }
+        Command::SetDone { id, done } => {
+            let todo = list
+                .iter_mut()
+                .find(|todo| todo.id == id)
+                .ok_or_else(|| missing(id))?;
+            todo.done = done;
+            Ok(ToolResult::text(format!(
+                "{} \"{}\".",
+                if done { "Completed" } else { "Reopened" },
+                todo.text
+            )))
+        }
+        Command::Delete(id) => {
+            let index = list
+                .iter()
+                .position(|todo| todo.id == id)
+                .ok_or_else(|| missing(id))?;
+            let todo = list.remove(index);
+            Ok(ToolResult::text(format!("Deleted \"{}\".", todo.text)))
+        }
+        Command::ClearCompleted => {
+            let before = list.len();
+            list.retain(|todo| !todo.done);
+            Ok(ToolResult::text(match before - list.len() {
+                0 => "Nothing was completed, so nothing was cleared.".to_string(),
+                1 => "Cleared 1 completed item.".to_string(),
+                n => format!("Cleared {n} completed items."),
+            }))
+        }
+    }
 }

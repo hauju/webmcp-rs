@@ -410,3 +410,5 @@ fn SiteFooter() -> Element {
         }
     }
 }
+#[cfg(all(test, target_family = "wasm"))]
+mod browser_tests;

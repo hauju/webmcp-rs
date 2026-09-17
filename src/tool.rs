@@ -56,6 +56,7 @@ impl Tool {
 
     /// What the tool does, in the terms the *model* needs to pick it. This is
     /// the single highest-leverage field on the descriptor.
+    /// A non-blank description is required before registration.
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -125,19 +126,41 @@ impl Tool {
         Fut: Future<Output = std::result::Result<ToolResult, E>> + 'static,
         E: std::fmt::Display + 'static,
     {
-        self.args::<T>().register(move |args: Value| {
-            // Deserialization failure is the agent's mistake to fix, so it comes
-            // back as an error result naming the offending field rather than as
-            // a panic or a silent default.
-            let call = serde_json::from_value::<T>(args).map(&handler);
-            async move {
-                match call {
-                    Ok(fut) => fut.await.map_err(|e| e.to_string()),
-                    Err(e) => Ok(ToolResult::error(format!("invalid arguments: {e}"))),
-                }
-            }
-        })
+        crate::imp::register(self.args::<T>(), erase_typed(handler))
     }
+
+    /// Like [`register_typed`](Self::register_typed), but awaits the browser's
+    /// verdict. Schema derivation and argument decoding are identical; browser
+    /// rejections (such as a duplicate name) are returned as [`Error::Rejected`].
+    #[cfg(feature = "schema")]
+    pub async fn register_typed_async<T, F, Fut, E>(self, handler: F) -> Result<ToolHandle>
+    where
+        T: serde::de::DeserializeOwned + schemars::JsonSchema + 'static,
+        F: Fn(T) -> Fut + 'static,
+        Fut: Future<Output = std::result::Result<ToolResult, E>> + 'static,
+        E: std::fmt::Display + 'static,
+    {
+        crate::imp::register_async(self.args::<T>(), erase_typed(handler)).await
+    }
+}
+
+#[cfg(feature = "schema")]
+fn erase_typed<T, F, Fut, E>(handler: F) -> ErasedHandler
+where
+    T: serde::de::DeserializeOwned + 'static,
+    F: Fn(T) -> Fut + 'static,
+    Fut: Future<Output = std::result::Result<ToolResult, E>> + 'static,
+    E: std::fmt::Display + 'static,
+{
+    erase(move |args| {
+        let call = serde_json::from_value::<T>(args).map(&handler);
+        async move {
+            match call {
+                Ok(fut) => fut.await.map_err(|e| e.to_string()),
+                Err(e) => Ok(ToolResult::error(format!("invalid arguments: {e}"))),
+            }
+        }
+    })
 }
 
 fn erase<F, Fut, E>(handler: F) -> ErasedHandler
@@ -188,11 +211,19 @@ impl std::fmt::Debug for ToolHandle {
     }
 }
 
-/// Reject a schema that is not a JSON object before it reaches the browser,
-/// where the failure would be an opaque console rejection.
-pub(crate) fn validate_schema(tool: &Tool) -> Result<()> {
+/// Validate the descriptor before it reaches the browser.
+pub(crate) fn validate_descriptor(tool: &Tool) -> Result<()> {
     if tool.name.trim().is_empty() {
-        return Err(Error::Schema("tool name must not be empty".into()));
+        return Err(Error::Descriptor("tool name must not be empty".into()));
+    }
+    if tool
+        .description
+        .as_deref()
+        .is_none_or(|text| text.trim().is_empty())
+    {
+        return Err(Error::Descriptor(
+            "tool description must not be empty".into(),
+        ));
     }
     if !tool.input_schema.is_object() {
         return Err(Error::Schema(format!(

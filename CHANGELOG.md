@@ -7,6 +7,22 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `register_typed_async`, combining derived schemas with awaited registration.
+- Browser integration tests for registration, argument decoding, tool lifetimes,
+  demo mutation acknowledgements, and event listener cleanup, run in CI.
+
+### Fixed
+
+- Reject missing or blank tool descriptions locally with `Error::Descriptor`;
+  blank names now use the same error instead of `Error::Schema`.
+- Return error results for invalid JS arguments without invoking handlers.
+  Only omitted arguments default to an empty object; explicit null is rejected.
+- Await applied demo mutations and refresh the snapshot before replying. Added
+  todos return their IDs; missing IDs are checked against the current state.
+- Remove the console's `toolchange` listener before dropping its callback.
+
+### Initial implementation
+
 - Initial release. `Tool` builder with `register`, `register_async` and
   `register_typed` (schema derived from the argument type via `schemars`);
   `ToolHandle` that unregisters on drop by aborting the registration's

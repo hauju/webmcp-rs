@@ -56,6 +56,9 @@ default = ["schema"]
 schema = ["dep:schemars"]
 dioxus = ["dep:dioxus"]
 
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 [package.metadata.docs.rs]
 all-features = true
 # Render the wasm-only `webmcp::wasm` module too; the host build hides it.

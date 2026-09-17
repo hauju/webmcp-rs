@@ -22,6 +22,10 @@ pub enum Error {
     #[error("registerTool() rejected the tool: {0}")]
     Rejected(String),
 
+    /// A required descriptor field is missing or blank.
+    #[error("invalid tool descriptor: {0}")]
+    Descriptor(String),
+
     /// `inputSchema` did not serialize to a JSON object.
     #[error("invalid input schema: {0}")]
     Schema(String),

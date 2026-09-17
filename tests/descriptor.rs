@@ -30,6 +30,7 @@ fn json_results_are_readable_text_blocks() {
 #[test]
 fn a_non_object_schema_is_rejected_before_it_reaches_the_browser() {
     let err = Tool::new("bad")
+        .description("Invalid schema test")
         .input_schema(serde_json::json!("just a string"))
         .register(|_| async { Ok::<_, std::convert::Infallible>(ToolResult::text("")) })
         .unwrap_err();
@@ -40,12 +41,28 @@ fn a_non_object_schema_is_rejected_before_it_reaches_the_browser() {
 #[test]
 fn an_empty_name_is_rejected() {
     let err = Tool::new("  ")
+        .description("Invalid name test")
         .register(|_| async { Ok::<_, std::convert::Infallible>(ToolResult::text("")) })
         .unwrap_err();
 
-    assert!(matches!(err, Error::Schema(_)), "got {err:?}");
+    assert!(matches!(err, Error::Descriptor(_)), "got {err:?}");
 }
 
+#[test]
+fn missing_and_blank_descriptions_are_rejected() {
+    for description in [None, Some(""), Some(" \n\t")] {
+        let mut tool = Tool::new("noop");
+        if let Some(description) = description {
+            tool = tool.description(description);
+        }
+        let err = tool
+            .register(|_| async { Ok::<_, std::convert::Infallible>(ToolResult::text("")) })
+            .unwrap_err();
+        assert!(matches!(err, Error::Descriptor(_)), "got {err:?}");
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
 #[test]
 fn registration_off_the_web_is_unsupported_not_a_panic() {
     let err = Tool::new("noop")

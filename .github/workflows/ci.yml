@@ -60,6 +60,23 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  browser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      # A controlled model context exercises the WASM/JS boundary without
+      # requiring an experimental browser flag or origin-trial token.
+      - run: wasm-pack test --headless --chrome --all-features
+      - run: wasm-pack test --headless --chrome --no-default-features
+      - run: wasm-pack test --headless --chrome site
+
   msrv:
     name: MSRV (rust-version)
     runs-on: ubuntu-latest

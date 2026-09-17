@@ -5,7 +5,7 @@
 //! an SSR server without `cfg` noise at every call site.
 
 use crate::error::{Error, Result};
-use crate::tool::{ErasedHandler, Tool, ToolHandle, validate_schema};
+use crate::tool::{ErasedHandler, Tool, ToolHandle, validate_descriptor};
 
 pub fn is_supported() -> bool {
     false
@@ -14,7 +14,7 @@ pub fn is_supported() -> bool {
 pub fn register(tool: Tool, _handler: ErasedHandler) -> Result<ToolHandle> {
     // Validate anyway, so a malformed descriptor is caught by a plain
     // `cargo test` instead of only in a browser.
-    validate_schema(&tool)?;
+    validate_descriptor(&tool)?;
     Err(Error::Unsupported)
 }
 

@@ -13,6 +13,45 @@ use js_sys::{Array, Function, JSON, Object, Promise, Reflect};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
+use web_sys::AbortController;
+
+/// Remove the JS listener before releasing its Rust callback on unmount.
+struct ToolChangeListener {
+    controller: AbortController,
+    _callback: Closure<dyn FnMut()>,
+}
+
+impl Drop for ToolChangeListener {
+    fn drop(&mut self) {
+        self.controller.abort();
+    }
+}
+
+impl ToolChangeListener {
+    fn new(context: &Object, callback: impl FnMut() + 'static) -> Option<Self> {
+        let add = method(context, "addEventListener")?;
+        let controller = AbortController::new().ok()?;
+        let listener = Self {
+            controller,
+            _callback: Closure::new(callback),
+        };
+        let options = Object::new();
+        Reflect::set(
+            &options,
+            &JsValue::from_str("signal"),
+            &listener.controller.signal(),
+        )
+        .ok()?;
+        add.call3(
+            context,
+            &JsValue::from_str("toolchange"),
+            listener._callback.as_ref(),
+            &options,
+        )
+        .ok()?;
+        Some(listener)
+    }
+}
 
 /// One tool as the page advertises it.
 #[derive(Clone, PartialEq)]
@@ -72,21 +111,11 @@ pub fn AgentConsole() -> Element {
     // Parked in hook state so the closure outlives the listener registration.
     use_hook(move || {
         let context = model_context()?;
-        let add = Reflect::get(&context, &JsValue::from_str("addEventListener"))
-            .ok()?
-            .dyn_into::<Function>()
-            .ok()?;
         let tx = refresh.tx();
-        let listener = Closure::<dyn FnMut()>::new(move || {
+        let listener = ToolChangeListener::new(&context, move || {
             let _ = tx.unbounded_send(());
-        });
-        add.call2(
-            &context,
-            &JsValue::from_str("toolchange"),
-            listener.as_ref(),
-        )
-        .ok()?;
-        // `Closure` is not `Clone`, which `use_hook` requires, so it rides in an `Rc`.
+        })?;
+        // `use_hook` requires Clone; the final Rc drop removes the listener.
         Some(Rc::new(listener))
     });
 
@@ -359,5 +388,34 @@ fn placeholder(property: &Value) -> Value {
         Some("array") => json!([]),
         Some("object") => json!({}),
         _ => Value::Null,
+    }
+}
+
+#[cfg(all(test, target_family = "wasm"))]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn toolchange_listener_is_removed_before_its_callback_drops() {
+        // A real DOM EventTarget implements addEventListener's signal option.
+        let target: Object = web_sys::window().unwrap().document().unwrap().into();
+        let calls = Rc::new(Cell::new(0));
+        let observed = calls.clone();
+        let listener =
+            ToolChangeListener::new(&target, move || observed.set(observed.get() + 1)).unwrap();
+        let dispatch = |target: &Object| {
+            let event = web_sys::Event::new("toolchange").unwrap();
+            method(target, "dispatchEvent")
+                .unwrap()
+                .call1(target, &event)
+                .unwrap();
+        };
+        dispatch(&target);
+        assert_eq!(calls.get(), 1);
+        drop(listener);
+        dispatch(&target);
+        assert_eq!(calls.get(), 1);
     }
 }
