@@ -13,7 +13,7 @@ use js_sys::{Array, Function, Object, Promise, Reflect};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
-use web_sys::AbortController;
+use web_sys::{AbortController, AbortSignal};
 
 use crate::ToolResult;
 use crate::error::{Error, Result};
@@ -50,7 +50,7 @@ pub struct Registration {
     controller: AbortController,
     /// The `execute` callback must outlive the registration — dropping it while
     /// the browser still holds a reference makes the tool throw when called.
-    _execute: Closure<dyn FnMut(JsValue) -> Promise>,
+    _execute: Closure<dyn FnMut(JsValue, JsValue) -> Promise>,
 }
 
 impl Drop for Registration {
@@ -73,34 +73,49 @@ fn prepare(tool: &Tool, handler: ErasedHandler) -> Result<(Object, Object, Regis
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| Error::Schema(e.to_string()))?;
 
-    let execute = Closure::<dyn FnMut(JsValue) -> Promise>::new(move |args: JsValue| {
-        let handler = Rc::clone(&handler);
-        future_to_promise(async move {
-            // A tool called with no arguments arrives as `undefined`; treat that
-            // as an empty object so handlers taking all-optional parameters work.
-            let parsed = if args.is_undefined() {
-                Ok(serde_json::Value::Object(Default::default()))
-            } else {
-                serde_wasm_bindgen::from_value(args)
-            };
-            let result = match parsed {
-                Ok(serde_json::Value::Object(args)) => {
-                    handler(serde_json::Value::Object(args)).await
-                }
-                Ok(_) => ToolResult::error("invalid arguments: expected an object"),
-                Err(e) => ToolResult::error(format!("invalid arguments: {e}")),
-            };
-            serde_wasm_bindgen::to_value(&result)
-                .map_err(|e| JsValue::from_str(&format!("failed to encode tool result: {e}")))
-        })
-    });
+    let execute = Closure::<dyn FnMut(JsValue, JsValue) -> Promise>::new(
+        move |args: JsValue, options: JsValue| {
+            let handler = Rc::clone(&handler);
+            future_to_promise(async move {
+                // A tool called with no arguments arrives as `undefined`; treat that
+                // as an empty object so handlers taking all-optional parameters work.
+                let parsed = if args.is_undefined() {
+                    Ok(serde_json::Value::Object(Default::default()))
+                } else {
+                    serde_wasm_bindgen::from_value(args)
+                };
+                let result = match parsed {
+                    Ok(serde_json::Value::Object(args)) => {
+                        cancellable(handler(serde_json::Value::Object(args)), &options).await
+                    }
+                    Ok(_) => ToolResult::error("invalid arguments: expected an object"),
+                    Err(e) => ToolResult::error(format!("invalid arguments: {e}")),
+                };
+                // Resolve even if encoding fails: a rejected `execute` reaches the
+                // agent as a bare `UnknownError`, with the reason thrown away.
+                Ok(serde_wasm_bindgen::to_value(&result).unwrap_or_else(|e| {
+                    JsValue::from_str(&format!("failed to encode tool result: {e}"))
+                }))
+            })
+        },
+    );
 
     let descriptor = Object::new();
     set(&descriptor, "name", &JsValue::from_str(&tool.name))?;
+    if let Some(title) = &tool.title {
+        set(&descriptor, "title", &JsValue::from_str(title))?;
+    }
     if let Some(description) = &tool.description {
         set(&descriptor, "description", &JsValue::from_str(description))?;
     }
     set(&descriptor, "inputSchema", &schema)?;
+    if tool.annotations != Default::default() {
+        let annotations = tool
+            .annotations
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(|e| Error::Descriptor(e.to_string()))?;
+        set(&descriptor, "annotations", &annotations)?;
+    }
     set(&descriptor, "execute", execute.as_ref())?;
 
     let controller = AbortController::new().map_err(|e| Error::Rejected(describe(&e)))?;
@@ -122,6 +137,37 @@ fn prepare(tool: &Tool, handler: ErasedHandler) -> Result<(Object, Object, Regis
             _execute: execute,
         },
     ))
+}
+
+/// Run `work`, dropping it if the execution's `signal` aborts first.
+///
+/// The browser hands `execute` a per-call `AbortSignal` for when the agent
+/// cancels. Dropping the handler future is the Rust form of honouring it: the
+/// work stops at its next `.await`, with no signal threaded through by hand.
+async fn cancellable(
+    work: std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult>>>,
+    options: &JsValue,
+) -> ToolResult {
+    let signal = Reflect::get(options, &JsValue::from_str("signal"))
+        .ok()
+        .and_then(|s| s.dyn_into::<AbortSignal>().ok());
+    let Some(signal) = signal else {
+        return work.await;
+    };
+    if signal.aborted() {
+        return ToolResult::error("cancelled");
+    }
+    let mut aborted = JsFuture::from(Promise::new(&mut |resolve, _| {
+        let _ = signal.add_event_listener_with_callback("abort", &resolve);
+    }));
+    let mut work = work;
+    std::future::poll_fn(|cx| {
+        if std::pin::Pin::new(&mut aborted).poll(cx).is_ready() {
+            return std::task::Poll::Ready(ToolResult::error("cancelled"));
+        }
+        work.as_mut().poll(cx)
+    })
+    .await
 }
 
 fn call_register(descriptor: &Object, options: &Object) -> Result<Promise> {

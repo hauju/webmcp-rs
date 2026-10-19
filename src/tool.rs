@@ -35,27 +35,55 @@ pub(crate) type ErasedHandler = Rc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = 
 /// ```
 pub struct Tool {
     pub(crate) name: String,
+    pub(crate) title: Option<String>,
     pub(crate) description: Option<String>,
     pub(crate) input_schema: Value,
+    pub(crate) annotations: Annotations,
     pub(crate) exposed_to: Vec<String>,
+}
+
+/// The descriptor's behaviour hints. Every hint defaults to `false` and the
+/// guidance is to send only the ones that are `true`, so `false` fields are
+/// skipped and an all-`false` set is left off the descriptor entirely.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Annotations {
+    #[serde(skip_serializing_if = "crate::result::is_false")]
+    pub read_only_hint: bool,
+    #[serde(skip_serializing_if = "crate::result::is_false")]
+    pub untrusted_content_hint: bool,
+    #[serde(skip_serializing_if = "crate::result::is_false")]
+    pub consequential_hint: bool,
+    #[serde(skip_serializing_if = "crate::result::is_false")]
+    pub debugging: bool,
 }
 
 impl Tool {
     /// Start a tool named `name`. Names are page-global: registering a name
-    /// that is already taken is an error, not an overwrite.
+    /// that is already taken is an error, not an overwrite. A name is 1–128
+    /// ASCII letters, digits, `_`, `-` or `.`.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            title: None,
             description: None,
             // A tool with no declared parameters still needs an object schema —
             // agents reject a descriptor whose inputSchema is absent or scalar.
             input_schema: serde_json::json!({ "type": "object", "properties": {} }),
+            annotations: Annotations::default(),
             exposed_to: Vec::new(),
         }
     }
 
+    /// A human-readable label for the tool, for UIs that list tools.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
     /// What the tool does, in the terms the *model* needs to pick it. This is
-    /// the single highest-leverage field on the descriptor.
+    /// the single highest-leverage field on the descriptor: say what it does
+    /// and when to use it ("Adds an item to the cart. Use when …").
     /// A non-blank description is required before registration.
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
@@ -72,6 +100,34 @@ impl Tool {
     #[cfg(feature = "schema")]
     pub fn args<T: schemars::JsonSchema>(mut self) -> Self {
         self.input_schema = crate::schema::schema_for::<T>();
+        self
+    }
+
+    /// Mark the tool as a pure query: it changes neither application state nor
+    /// the view. A tool that navigates or switches tabs is not read-only.
+    pub fn read_only(mut self) -> Self {
+        self.annotations.read_only_hint = true;
+        self
+    }
+
+    /// Mark the tool's output as possibly containing text written by users or
+    /// third parties (comments, reviews, tickets) — even from your own
+    /// database — so the agent treats it as data, not instructions.
+    pub fn untrusted_content(mut self) -> Self {
+        self.annotations.untrusted_content_hint = true;
+        self
+    }
+
+    /// Mark the tool as significant, real-world or irreversible (a payment, a
+    /// booking, a deletion), so the agent can confirm with the user first.
+    pub fn consequential(mut self) -> Self {
+        self.annotations.consequential_hint = true;
+        self
+    }
+
+    /// Mark the tool as developer tooling rather than an end-user action.
+    pub fn debugging(mut self) -> Self {
+        self.annotations.debugging = true;
         self
     }
 
@@ -215,6 +271,17 @@ impl std::fmt::Debug for ToolHandle {
 pub(crate) fn validate_descriptor(tool: &Tool) -> Result<()> {
     if tool.name.trim().is_empty() {
         return Err(Error::Descriptor("tool name must not be empty".into()));
+    }
+    if tool.name.len() > 128
+        || !tool
+            .name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
+    {
+        return Err(Error::Descriptor(format!(
+            "tool name `{}` must be 1-128 ASCII letters, digits, `_`, `-` or `.`",
+            tool.name
+        )));
     }
     if tool
         .description

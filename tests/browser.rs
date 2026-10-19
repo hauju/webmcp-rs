@@ -97,6 +97,9 @@ async fn browser_registration_and_execution() {
     assert_eq!(result["content"][0]["text"], "handler failed");
     drop(handle);
 
+    descriptor_metadata().await;
+    cancellation().await;
+
     #[cfg(feature = "schema")]
     typed_registration().await;
     #[cfg(feature = "dioxus")]
@@ -104,6 +107,66 @@ async fn browser_registration_and_execution() {
     #[cfg(feature = "leptos")]
     owner_lifetime().await;
     assert!(browser::names().await.is_empty());
+}
+
+async fn descriptor_metadata() {
+    let plain = tool("plain")
+        .register(|_| async { Ok::<_, Infallible>(ToolResult::text("")) })
+        .unwrap();
+    let annotated = tool("annotated")
+        .title("Annotated tool")
+        .read_only()
+        .untrusted_content()
+        .register(|_| async { Ok::<_, Infallible>(ToolResult::text("")) })
+        .unwrap();
+    let descriptors = browser::descriptors().await;
+    let find = |name: &str| {
+        descriptors
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["name"] == name)
+            .unwrap()
+            .clone()
+    };
+    // Hints are opt-in: nothing set means no `annotations` key, not `false`s.
+    let plain_descriptor = find("plain");
+    assert!(plain_descriptor.get("annotations").is_none());
+    assert!(plain_descriptor.get("title").is_none());
+    let annotated_descriptor = find("annotated");
+    assert_eq!(annotated_descriptor["title"], "Annotated tool");
+    assert_eq!(
+        annotated_descriptor["annotations"],
+        serde_json::json!({ "readOnlyHint": true, "untrustedContentHint": true })
+    );
+    drop((plain, annotated));
+}
+
+async fn cancellation() {
+    struct Dropped(Rc<Cell<bool>>);
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    let dropped = Rc::new(Cell::new(false));
+    let flag = dropped.clone();
+    let handle = tool("forever")
+        .register(move |_| {
+            let guard = Dropped(flag.clone());
+            async move {
+                std::future::pending::<()>().await;
+                drop(guard);
+                Ok::<_, Infallible>(ToolResult::text("unreachable"))
+            }
+        })
+        .unwrap();
+    let result = browser::invoke_then_cancel("forever", JsValue::UNDEFINED).await;
+    assert_eq!(result["isError"], true);
+    assert_eq!(result["content"][0]["text"], "cancelled");
+    assert!(dropped.get(), "cancelling must drop the handler's future");
+    drop(handle);
 }
 
 #[cfg(feature = "schema")]

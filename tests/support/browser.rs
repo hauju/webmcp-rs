@@ -29,10 +29,10 @@ export function installContext() {
         await Promise.resolve();
     };
     context.getTools = async () => Array.from(tools.values());
-    context.executeTool = async (tool, args) => {
+    context.executeTool = async (tool, args, options = {}) => {
         const registered = tools.get(tool.name);
         if (!registered) throw new Error('missing tool');
-        return registered.execute(args);
+        return registered.execute(args, {signal: options.signal ?? new AbortController().signal});
     };
     context.restore = () => {
         if (previous) Object.defineProperty(document, 'modelContext', previous);
@@ -48,6 +48,15 @@ export async function invokeTool(name, args) {
     if (!tool) throw new Error('missing tool: ' + name);
     return document.modelContext.executeTool(tool, args);
 }
+export async function invokeThenCancel(name, args) {
+    const tools = await document.modelContext.getTools();
+    const tool = tools.find(tool => tool.name === name);
+    const controller = new AbortController();
+    const result = document.modelContext.executeTool(tool, args, {signal: controller.signal});
+    await new Promise(resolve => setTimeout(resolve, 0));
+    controller.abort();
+    return result;
+}
 export async function registeredTools() { return document.modelContext.getTools(); }
 export function undecodableArguments() { return {value: Symbol('invalid JSON')}; }
 export function fireToolChange(context) { context.dispatchEvent(new Event('toolchange')); }
@@ -56,6 +65,7 @@ extern "C" {
     fn installContext() -> JsValue;
     fn restoreContext(context: &JsValue);
     fn invokeTool(name: &str, args: &JsValue) -> Promise;
+    fn invokeThenCancel(name: &str, args: &JsValue) -> Promise;
     fn registeredTools() -> Promise;
     pub fn undecodableArguments() -> JsValue;
     pub fn fireToolChange(context: &JsValue);
@@ -81,6 +91,10 @@ pub fn json(value: &JsValue) -> Value {
 
 pub async fn invoke(name: &str, args: JsValue) -> Value {
     json(&JsFuture::from(invokeTool(name, &args)).await.unwrap())
+}
+
+pub async fn invoke_then_cancel(name: &str, args: JsValue) -> Value {
+    json(&JsFuture::from(invokeThenCancel(name, &args)).await.unwrap())
 }
 
 pub async fn names() -> Vec<String> {

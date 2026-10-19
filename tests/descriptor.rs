@@ -49,6 +49,33 @@ fn an_empty_name_is_rejected() {
 }
 
 #[test]
+fn names_outside_the_spec_alphabet_are_rejected() {
+    let long = "a".repeat(129);
+    for name in ["has space", "émoji", "slash/name", long.as_str()] {
+        let err = Tool::new(name)
+            .description("Invalid name test")
+            .register(|_| async { Ok::<_, std::convert::Infallible>(ToolResult::text("")) })
+            .unwrap_err();
+        assert!(matches!(err, Error::Descriptor(_)), "{name}: got {err:?}");
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+#[test]
+fn spec_names_and_annotations_pass_validation() {
+    let err = Tool::new("todo.add-item_2")
+        .title("Add item")
+        .description("Valid name test")
+        .read_only()
+        .untrusted_content()
+        .consequential()
+        .debugging()
+        .register(|_| async { Ok::<_, std::convert::Infallible>(ToolResult::text("")) })
+        .unwrap_err();
+    assert!(matches!(err, Error::Unsupported), "got {err:?}");
+}
+
+#[test]
 fn missing_and_blank_descriptions_are_rejected() {
     for description in [None, Some(""), Some(" \n\t")] {
         let mut tool = Tool::new("noop");

@@ -184,6 +184,7 @@ pub fn TodoDemo() -> Element {
         move || {
             Tool::new("delete_todo")
                 .description("Remove one todo item from the list for good.")
+                .consequential()
                 .register_typed(move |args: TodoId| {
                     let tx = tx.clone();
                     async move { send(&tx, Command::Delete(args.id)).await }
@@ -199,6 +200,9 @@ pub fn TodoDemo() -> Element {
                     "List every todo item with its id, text and completion state. \
                      The other tools take the ids this returns.",
                 )
+                // Item text is whatever a user typed: data, not instructions.
+                .read_only()
+                .untrusted_content()
                 .register_typed(move |_: NoArgs| {
                     let snapshot = snapshot.clone();
                     async move { Ok::<_, String>(ToolResult::json(&*snapshot.borrow())) }
@@ -211,6 +215,7 @@ pub fn TodoDemo() -> Element {
         move || {
             Tool::new("clear_completed")
                 .description("Remove every item that is already done, leaving the rest alone.")
+                .consequential()
                 .register_typed(move |_: NoArgs| {
                     let tx = tx.clone();
                     async move { send(&tx, Command::ClearCompleted).await }

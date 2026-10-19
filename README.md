@@ -114,10 +114,26 @@ unqualified as `webmcp::use_tool`.
 - `register_typed_async(...)` — combines derived schemas and typed arguments
   with the awaited registration verdict.
 
-Every tool needs a non-blank `.description(...)`. Missing descriptions and blank
-names return `Error::Descriptor` before reaching the browser, including on native
-targets. Invalid JS arguments return an error result without invoking the handler;
+Every tool needs a non-blank `.description(...)`; say what the tool does and
+when to use it. Names are 1–128 ASCII letters, digits, `_`, `-` or `.`. Missing
+descriptions and invalid names return `Error::Descriptor` before reaching the
+browser, including on native targets. Invalid JS arguments return an error result without invoking the handler;
 only an omitted (`undefined`) argument defaults to an empty object.
+
+```rust
+Tool::new("list_comments")
+    .title("List comments")
+    .description("Lists the comments on this post. Use when the user asks what people said.")
+    .read_only()          // a pure query: no state or view changes
+    .untrusted_content()  // returns text other users wrote
+```
+
+Behaviour hints are opt-in and sent only when set. `.consequential()` marks
+irreversible actions (payments, deletions) so the agent can confirm first;
+`.debugging()` marks developer-only tools.
+
+When the agent cancels a call, the handler's future is dropped, so its work
+stops at the next `.await`; the agent gets an error result reading `cancelled`.
 
 A handler returns `Result<ToolResult, E>` for any `E: Display`; an `Err` reaches
 the agent as `isError: true` with the message, which is the protocol's soft
@@ -157,6 +173,8 @@ The browser API is not stable. This crate tracks the April 2026 draft:
 | `provideContext()` / `clearContext()` | removed March 2026, not implemented |
 | `unregisterTool()` | removed April 2026, replaced by aborting the signal |
 | Declarative API (`toolname` on `<form>`) | out of scope; plain HTML already covers it |
+| `title`, `annotations`, execution `signal` | supported |
+| `getTools()` / `executeTool()`, `toolactivated` / `toolcancel` | consumer side, out of scope |
 
 The interface is reached reflectively rather than through `extern` bindings, so
 a browser with an older or different surface degrades to `Error::Unsupported`
@@ -200,6 +218,9 @@ context to exercise registration, execution, errors, and cleanup without an
 experimental browser flag. It also mounts Dioxus components and cleans up Leptos
 owners to check tool lifetimes, and reads immediately following mutations. This validates the Rust/JS
 integration; it does not certify a particular native WebMCP implementation.
+
+In a real browser, inspect and call tools in DevTools (**Application > WebMCP**)
+or with Google's [webmcp-extension](https://github.com/GoogleChromeLabs/webmcp-extension).
 
 ## License
 
