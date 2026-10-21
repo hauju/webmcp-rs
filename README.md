@@ -18,7 +18,7 @@ authorization rules, and the agent sees exactly what the user can see.
 
 ```toml
 [dependencies]
-webmcp-rs = "0.1"
+webmcp-rs = "0.2"
 ```
 
 The package is `webmcp-rs` (the bare `webmcp` name on crates.io is a
