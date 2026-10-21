@@ -71,6 +71,13 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
+      - uses: oven-sh/setup-bun@v2
+      # The site's `asset!` needs the generated stylesheet to compile its tests.
+      - name: Build Tailwind CSS
+        working-directory: site
+        run: |
+          bun install --frozen-lockfile
+          ./node_modules/.bin/tailwindcss -i tailwind.css -o assets/tailwind.css --minify
       # A controlled model context exercises the WASM/JS boundary without
       # requiring an experimental browser flag or origin-trial token.
       - run: wasm-pack test --headless --chrome --all-features
