@@ -107,3 +107,12 @@ body {
 .rise {
     animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+
+/* Focused fields: DaisyUI's focus colour on the field's own border, without
+   the second ring it draws as an offset outline. Forced-colors mode keeps the
+   outline, since there a border colour change is not a reliable indicator. */
+@media not (forced-colors: active) {
+    :is(.input, .select, .textarea, .file-input):is(:focus, :focus-within) {
+        outline: none;
+    }
+}
