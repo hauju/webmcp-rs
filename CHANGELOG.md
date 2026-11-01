@@ -5,6 +5,8 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
 ### Added
 
 - `topcoat` feature: `topcoat::webmcp_tools` renders a script that registers
