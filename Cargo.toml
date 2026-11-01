@@ -41,6 +41,13 @@ dioxus = { version = "0.7.9", optional = true, default-features = false, feature
 # the reactive core the host app already builds.
 leptos = { version = "0.8", optional = true }
 
+# Optional: server-rendered tools for Topcoat, which ships no wasm. Host-only,
+# so `--all-features` still builds for wasm32.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+topcoat = { version = "0.11", optional = true, default-features = false, features = [
+    "view",
+] }
+
 [target.'cfg(target_family = "wasm")'.dependencies]
 js-sys = "0.3"
 wasm-bindgen = "0.2"
@@ -61,6 +68,10 @@ default = ["schema"]
 schema = ["dep:schemars"]
 dioxus = ["dep:dioxus"]
 leptos = ["dep:leptos"]
+topcoat = ["dep:topcoat"]
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3"

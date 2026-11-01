@@ -102,6 +102,42 @@ warns when it finds none.
 Both features export `use_tool`; with exactly one enabled it is also available
 unqualified as `webmcp::use_tool`.
 
+## Topcoat
+
+[Topcoat](https://github.com/tokio-rs/topcoat) ships no WebAssembly, so its
+tools run on the server. `webmcp_tools` renders a small inline script that
+registers each `Tool` on the page and forwards calls as a JSON `POST` to a route
+you write. The handler runs inside the signed-in user's request, so it is
+authorized like any other route.
+
+```rust
+use topcoat::{Result, context::Cx, router::{content::Json, page, route}, view::{View, view}};
+use webmcp::{Tool, ToolResult, topcoat::{ToolCall, webmcp_tools}};
+
+fn tools() -> Vec<Tool> {
+    vec![Tool::new("add_todo").description("Add an item to the user's todo list").args::<AddTodo>()]
+}
+
+#[page("/")]
+async fn home() -> Result<impl View> {
+    let tools = tools();
+    Ok(view! { webmcp_tools(tools: &tools, endpoint: "/webmcp") })
+}
+
+#[route(POST "/webmcp")]
+async fn call_tool(cx: &Cx, Json(call): Json<ToolCall>) -> Result<Json<ToolResult>> {
+    Ok(Json(match call.name.as_str() {
+        "add_todo" => call.run(|args: AddTodo| add_todo(cx, args)).await,
+        _ => call.unknown(),
+    }))
+}
+```
+
+Enable it with `features = ["topcoat"]` (Topcoat 0.11, Rust 1.99). Don't name the
+route function `webmcp`, because that name collides with the crate. Tools live
+as long as the document, and a re-run of the script (after an HTMX swap, for
+example) replaces the previous set instead of colliding with it.
+
 ## Handlers
 
 - `register(|args: serde_json::Value| ...)` — hand-written `inputSchema`.
@@ -185,6 +221,7 @@ rather than throwing.
 - `schema` (default) — `register_typed` / `Tool::args::<T>()` via `schemars`.
 - `dioxus` — `use_tool`, tying a registration to a component's lifetime.
 - `leptos` — the same, tied to the component's reactive owner.
+- `topcoat` — server-rendered tools for Topcoat (host-only).
 
 ## Site
 

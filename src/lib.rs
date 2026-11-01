@@ -76,6 +76,8 @@ use native as imp;
 pub mod dioxus;
 #[cfg(feature = "leptos")]
 pub mod leptos;
+#[cfg(all(feature = "topcoat", not(target_family = "wasm")))]
+pub mod topcoat;
 
 pub use error::{Error, Result};
 pub use result::{Content, ToolResult};
