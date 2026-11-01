@@ -133,7 +133,7 @@ async fn call_tool(cx: &Cx, Json(call): Json<ToolCall>) -> Result<Json<ToolResul
 }
 ```
 
-Enable it with `features = ["topcoat"]` (Topcoat 0.11, Rust 1.99). Don't name the
+Enable it with `features = ["topcoat"]` (Topcoat 0.11). Don't name the
 route function `webmcp`, because that name collides with the crate. Tools live
 as long as the document, and a re-run of the script (after an HTMX swap, for
 example) replaces the previous set instead of colliding with it.

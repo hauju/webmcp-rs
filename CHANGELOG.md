@@ -10,11 +10,11 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `topcoat` feature: `topcoat::webmcp_tools` renders a script that registers
   tools on the page and forwards each call to an app route, and `ToolCall`
   decodes the forwarded call with `run` and `unknown`. Host-only; requires
-  Topcoat 0.11 and Rust 1.99.
+  Topcoat 0.11.
 
 ### Changed
 
-- CI toolchain bumped to Rust 1.99, Topcoat's minimum.
+- MSRV raised from 1.88 to 1.99, Topcoat's minimum.
 
 ## [0.2.0] - 2026-10-21
 

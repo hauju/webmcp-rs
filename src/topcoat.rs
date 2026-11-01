@@ -39,8 +39,7 @@
 //! The tools live as long as the document. A re-run of the script (an HTMX
 //! swap, say) replaces the previous set rather than colliding with it.
 //!
-//! Requires Rust 1.99, Topcoat's minimum. Host-only: the feature compiles to
-//! nothing on wasm.
+//! Host-only: the feature compiles to nothing on wasm.
 
 use std::future::Future;
 
