@@ -1,5 +1,5 @@
 //! The Topcoat bridge: what the script carries and how calls dispatch.
-#![cfg(feature = "topcoat")]
+#![cfg(all(feature = "topcoat", not(target_family = "wasm")))]
 
 use serde_json::{Value, json};
 use topcoat::{
