@@ -227,6 +227,9 @@ rather than throwing.
 
 - [SeggWat](https://seggwat.com): the public feedback boards give agents tools to
   browse, vote on, submit and comment on ideas as the visitor (Dioxus).
+- [Overhear](https://overhear.dev): every signed-in dashboard page offers the
+  hosted MCP server's tools to the agent in the user's browser, running inside
+  the user's own session (Topcoat).
 - [dioxus-docs-kit](https://github.com/oxidt/oxidt-docs-kit/blob/main/crates/dioxus-docs-kit/src/webmcp.rs):
   docs sites built with it let agents search the docs and read pages and API
   operations as Markdown, from the index already compiled into the wasm (Dioxus).
