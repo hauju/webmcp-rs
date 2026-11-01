@@ -223,6 +223,14 @@ rather than throwing.
 - `leptos` — the same, tied to the component's reactive owner.
 - `topcoat` — server-rendered tools for Topcoat (host-only).
 
+## Used by
+
+- [SeggWat](https://seggwat.com): the public feedback boards give agents tools to
+  browse, vote on, submit and comment on ideas as the visitor (Dioxus).
+- [dioxus-docs-kit](https://github.com/oxidt/oxidt-docs-kit/blob/main/crates/dioxus-docs-kit/src/webmcp.rs):
+  docs sites built with it let agents search the docs and read pages and API
+  operations as Markdown, from the index already compiled into the wasm (Dioxus).
+
 ## Site
 
 `site/` is the Dioxus web app behind the live demo: one client-rendered page,
