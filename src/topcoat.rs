@@ -45,6 +45,7 @@ use std::future::Future;
 
 use ::topcoat::{
     Result,
+    context::Cx,
     view::{Unescaped, View, component, view},
 };
 use serde::Deserialize;
@@ -61,7 +62,7 @@ const BRIDGE: &str = include_str!("topcoat.js");
 /// and answers with a [`ToolResult`]. Rendering fails if a descriptor is
 /// invalid, the same checks [`Tool::register`] runs in the browser.
 #[component]
-pub async fn webmcp_tools(tools: &[Tool], endpoint: &str) -> Result<impl View> {
+pub async fn webmcp_tools(cx: &Cx, tools: &[Tool], endpoint: &str) -> Result<impl View> {
     let descriptors = tools
         .iter()
         .map(descriptor)

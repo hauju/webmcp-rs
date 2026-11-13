@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use topcoat::{
-    context::CxTestBuilder,
+    context::Cx,
     view::{ViewExt, view},
 };
 use webmcp::{
@@ -12,8 +12,8 @@ use webmcp::{
 };
 
 async fn render(tools: &[Tool], endpoint: &str) -> topcoat::Result<String> {
-    let cx = &CxTestBuilder::new().build();
-    let html = view! { cx => webmcp_tools(tools: tools, endpoint: endpoint) }
+    let cx = &Cx::new();
+    let html = view! { webmcp_tools(tools: tools, endpoint: endpoint) }
         .single()
         .await?
         .render(cx);
