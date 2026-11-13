@@ -1,6 +1,6 @@
 [package]
 name = "webmcp-rs"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Hauke Jung <hauke.jung@outlook.de>"]
 edition = "2024"
 # Topcoat 0.12 (the `topcoat` feature) requires 1.99.

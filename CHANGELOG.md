@@ -5,6 +5,8 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+
 ### Changed
 
 - **Breaking:** the `topcoat` feature now needs Topcoat 0.12. Call sites stay
